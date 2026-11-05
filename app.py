@@ -2,6 +2,9 @@ import streamlit as st
 from mock_data import MOCK_TASKS, MOCK_STATS, MOCK_USER, MOCK_TOKEN
 import api_client
 import time
+import pandas as pd
+import plotly.express as px
+
 
 # Step 1: Streamlit page configuration 
 st.set_page_config(
@@ -20,6 +23,99 @@ if "messages" not in st.session_state:
 
 if "use_mock" not in st.session_state:
     st.session_state.use_mock = False
+
+# Dashboard helper functions
+def load_tasks():
+    """Return sample tasks for the dashboard."""
+
+    return MOCK_TASKS.copy()
+
+#() to calculate task statistics
+def calculate_stats(tasks):
+
+    total_total = len(tasks)
+
+    done_tasks = sum(
+        1 for task in tasks if task["done"]
+    )
+
+    pending_tasks = total_total - done_tasks
+
+    return {
+        "total": total_total,
+        "done": done_tasks,
+        "pending": pending_tasks
+    }
+
+#Display dashboard metrics, table & chart.
+def show_dashboard(tasks):
+
+    st.header("📊 Task Dashboard")
+
+    stats = calculate_stats(tasks)
+
+    #Three metric cards
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            label="Total Tasks", 
+            value=stats["total"]
+        )
+
+    with col2:
+        st.metric(
+            label="Completed Tasks", 
+            value=stats["done"]
+        )
+
+    with col3:
+        st.metric(
+            label="Pending Tasks", 
+            value=stats["pending"]
+        )
+
+    st.divider()
+
+    #Task dataframe
+    st.subheader("Task Overview")
+
+    df = pd.DataFrame(tasks)
+
+    st.dataframe(
+        df,
+        width="stretch",
+        hide_index=True
+    )
+
+    st.divider()
+
+    #Task status chart
+    st.subheader("Task Completion Chart")
+
+    chart_data = pd.DataFrame({
+        "Status": ["Completed", "Pending"],
+        "Count": [stats["done"], stats["pending"]]
+    })
+
+    fig = px.bar(
+        chart_data,
+        x="Status",
+        y="Count",
+        color="Status",
+        title="Completed vs Pending Tasks",
+        text="Count"
+    )
+
+    fig.update_layout(
+        showlegend=False
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch",
+        key="task_completion_chart"
+    )
 
 # ═════════════════════════════════
 # SECTION A — AUTHENTICATION
@@ -113,34 +209,38 @@ with st.sidebar:
 # ══════════════════════════════════
 # SECTION C — MAIN CONTENT (tabs)
 # ═════════════════════════════════
-st.title("📊 Welcome to the AI Dashboard!")
+
+st.title("🤖 AI Dashboard")
 
 st.write(
-    f"Hello, {st.session_state.username}! "
-    "You have successfully logged in."
+    f"Welcome back, {st.session_state.username}!"
 )
+tab_dash, tab_tasks, tab_chat = st.tabs([
+    "📊 Dashboard",
+    "✅ Tasks",
+    "🤖 AI Chat"
+])
 
-st.info(
-    "Authentication is working. "
-    "Dashboard features will be added in Phase 3."
-)
+tasks = load_tasks()
 
-# TODO tab_dash, tab_tasks, tab_chat = st.tabs(["📊 Dashboard", "✅ Tasks", "🤖 AI Chat"])
+with tab_dash:
+    show_dashboard(tasks)
 
-# ── TAB 1: Dashboard ──────────────────────────────────────────────────────
-# TODO: with tab_dash:
-#   - Load tasks (or use MOCK_TASKS if in mock mode)
-#   - Show 3 st.metric() in 3 columns: total, done, pending
-#   - Show st.dataframe() with task data
-#   - Show a bar chart of done vs pending
+with tab_tasks:
+    st.header("✅ Task Management")
+    st.info(
+        "Task creation and completion "
+        "will be implemented in Phase 5."
+    )
 
-# ── TAB 2: Tasks ──────────────────────────────────────────────────────────
-# TODO: with tab_tasks:
-#   - Add task form (POST to API or append to mock data)
-#   - Task list with Complete buttons (PATCH to API or update mock)
-#   - Error handling for API failures
+with tab_chat:
+    st.header("🤖 AI Chat")
+    st.info(
+        "AI chat functionality "
+        "will be implemented in Phase 6."
+    )
 
-# ── TAB 3: AI Chat ────────────────────────────────────────────────────────
+# ── TAB 3: AI Chat ───────────────────
 # TODO: with tab_chat:
 #   - Render chat history (st.chat_message for each message)
 #   - st.chat_input for user messages
