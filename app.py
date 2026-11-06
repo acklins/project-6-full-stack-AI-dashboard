@@ -1,9 +1,12 @@
+from numpy import full
 import streamlit as st
 from mock_data import MOCK_TASKS,  MOCK_USER, MOCK_TOKEN
 import api_client
 import time
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
+
 
 
 # Step 1: Streamlit page configuration 
@@ -54,6 +57,118 @@ def calculate_stats(tasks):
         "done": done,
         "pending": pending
     }
+
+#Generate a task aware mock AI response 
+def generate_ai_response(prompt, tasks, system_prompt):
+
+    question = prompt.lower().strip()
+    stats = calculate_stats(tasks)
+
+    total = stats["total"]
+    done = stats["done"]
+    pending = stats["pending"]
+
+    pending_tasks = [
+        task for task in tasks if not task["done"]
+    ]
+
+    completed_tasks = [
+        task for task in tasks if task["done"]
+    ]
+
+    #Question about pending tasks
+    if any(word in question for word in [
+        "pending", "incomplete", "remaining", "unfinished"
+    ]):
+
+        if not pending_tasks:
+            return "Excellent work! You have no pending tasks."
+
+        task_list = "\n".join(
+            f"- {task['title']}" 
+            for task in pending_tasks
+        )
+
+        return(
+            f"You currently have {pending} pending tasks: \n\n"
+            f"{task_list}."
+        )
+
+    #Question about completed tasks
+    elif any(word in question for word in [
+        "completed", "finished", "done"
+    ]):
+        if not completed_tasks:
+            return "You have not completed any tasks yet."
+
+        task_list = "\n".join(
+            f"- {task['title']}" 
+            for task in completed_tasks
+        )
+
+        return(
+            f"You have completed {done} tasks: \n\n"
+            f"{task_list}"
+        )
+
+    #Question about overall progress
+    elif any(word in question for word in [
+        "summary", "progress", "status", "overview"
+    ]):
+
+        percentage = (
+            round(done / total * 100, 1) 
+            if total > 0 else 0
+        )
+
+        return (
+            f"Here is your task progress summary:\n\n"
+            f"- Total tasks: {total}\n"
+            f"- Completed tasks: {done}\n"
+            f"- Pending tasks: {pending}\n"
+            f"- Completion rate: {percentage}%\n\n"
+            f"Keep working through your pending tasks!"
+        )
+
+    #Question asking for suggestions
+    elif any(word in question for word in [
+        "suggest", "recommend", "priority", "next"
+    ]):
+
+        if not pending_tasks:
+            return (
+                "All your tasks are complete. "
+                "Consider creating a new goal  "
+                "And taking time to celebrate & rest!"
+            )
+
+        next_task = pending_tasks[0]["title"]
+
+        return(
+            f"My suggestion is to focus on:\n\n"
+            f"**{next_task}**\n\n"
+            f"Start with this pending task, break it into "
+            f"smaller steps, and complete one step at a time."
+        )
+
+    #General fallback response
+    else:
+        return(
+            "I am your AI Dashboard assistant.\n\n"
+            "I can help you:\n"
+            "- Summarize your task progress\n"
+            "- List pending tasks\n"
+            "- Review completed tasks\n"
+            "- Suggest what to work on next\n\n"
+            "Try asking: **What should I work on next?**"
+        )
+
+#Stream a mock AI response word by word
+def stream_ai_response(response):
+
+    for word in response.split(" "):
+        yield word + " "
+        time.sleep(0.04)
 
 #Display dashboard metrics, dataframe & chart.
 def show_dashboard(tasks):
@@ -210,6 +325,87 @@ def show_task_management(tasks):
         "tasks reset when the backend restarts."
     )
 
+#Display AI chat with history and streaming
+def show_ai_chat(tasks, system_prompt):
+
+    st.header("🤖 AI Task Assistant")
+
+    st.caption(
+        "Mock AI assistant using your current task data."
+    )
+
+    #Chat controls
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button(
+            "Clear Conversation",
+            key="clear_chat"
+        ):
+
+            st.session_state.messages = []
+            st.rerun()
+
+    with col2:
+        export_text = ""
+
+        for message in st.session_state.messages:
+            role = message["role"].upper()
+            content = message["content"]
+
+            export_text += (
+                f"{role}:\n{content}\n\n"
+            )
+
+        st.download_button(
+            label="Download Conversation",
+            data=export_text,
+            file_name=(
+                "ai_chat_"
+                + datetime.now().strftime("%Y%m%d_%H%M%S")
+                + ".txt"
+            ),
+            mime="text/plain",
+            disabled=not st.session_state.messages
+        )
+    st.divider()
+
+    #Display previous messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    #Chat input
+    if prompt := st.chat_input(
+        "Ask about your tasks..."
+    ):
+        #Save and display user message
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt
+        })
+
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        #Generate and stream assistant response
+        with st.chat_message("assistant"):
+
+            response = generate_ai_response(
+                prompt,
+                tasks,
+                system_prompt
+            )
+
+            full_response = st.write_stream(
+                stream_ai_response(response)
+            )
+        #Save assistant response
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": full_response
+        })
+        
 # ═════════════════════════════════
 # SECTION D — AUTHENTICATION
 # ═════════════════════════════════
@@ -292,10 +488,18 @@ with st.sidebar:
 
     system_prompt = st.text_area(
         "System Prompt",
-        value="You are a helpful AI assistant."
+        value=(
+            "You are a helpful task management assistant. "
+            "Help users understand their progress, "
+            "identify pending tasks and plan next steps."
+        ),
+        height=120
     )
 
-    st.caption("Module 6 Final Project")
+    st.caption(
+        "Mock AI mode: responses are generated "
+        "locally using task data."
+    )
 
 # ══════════════════════════════════
 # SECTION F — MAIN CONTENT 
@@ -329,6 +533,7 @@ if error:
 
     st.stop()
 
+#AI Chat
 with tab_dash:
     show_dashboard(tasks)
 
@@ -336,12 +541,12 @@ with tab_tasks:
     show_task_management(tasks)
 
 with tab_chat:
-    st.header("🤖 AI Chat")
+    show_ai_chat(tasks, system_prompt)
 
     st.info(
         "AI chat functionality wi ll be "
         "implemented in Phase 6."
     )
 
-# ── TAB 3: AI Chat ───────────────────
+
 
