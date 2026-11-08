@@ -543,10 +543,5 @@ with tab_tasks:
 with tab_chat:
     show_ai_chat(tasks, system_prompt)
 
-    st.info(
-        "AI chat functionality wi ll be "
-        "implemented in Phase 6."
-    )
-
 
 
